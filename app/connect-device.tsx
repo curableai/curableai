@@ -142,23 +142,73 @@ export default function ConnectDeviceScreen() {
 
                 {selectedBrand && (
                     <View style={styles.section}>
-                        <Text style={[styles.sectionTitle, { color: colors.text }]}>2. Setup Requirement</Text>
-                        <View style={[styles.infoCard, { backgroundColor: colors.surfaceElevated }]}>
-                            <Ionicons name="information-circle-outline" size={24} color={colors.primary} style={{ marginBottom: 8 }} />
-                            <Text style={[styles.infoText, { color: colors.text }]}>
-                                To sync your {WATCH_BRANDS.find(b => b.id === selectedBrand)?.name} watch, you must have:
-                            </Text>
-                            <View style={styles.requirementList}>
-                                <View style={styles.reqItem}>
-                                    <Text style={[styles.reqNumber, { color: colors.textMuted }]}>1.</Text>
-                                    <Text style={[styles.reqText, { color: colors.text }]}>The {WATCH_BRANDS.find(b => b.id === selectedBrand)?.name} app installed and set up on this phone.</Text>
+                        <Text style={[styles.sectionTitle, { color: colors.text }]}>2. Setup Instructions</Text>
+
+                        {/* Brand-specific instructions */}
+                        {(selectedBrand === 'oraimo' || selectedBrand === 'xiaomi' || selectedBrand === 'other') ? (
+                            <View style={[styles.infoCard, { backgroundColor: colors.surfaceElevated }]}>
+                                <Ionicons name="bulb-outline" size={24} color="#F59E0B" style={{ marginBottom: 8 }} />
+                                <Text style={[styles.infoText, { color: colors.text, fontWeight: '600' }]}>
+                                    Budget Watch Setup (via Google Fit)
+                                </Text>
+                                <View style={styles.requirementList}>
+                                    <View style={styles.reqItem}>
+                                        <Text style={[styles.reqNumber, { color: colors.primary }]}>1.</Text>
+                                        <Text style={[styles.reqText, { color: colors.text }]}>
+                                            Open your watch app ({selectedBrand === 'oraimo' ? 'Oraimo Health' : selectedBrand === 'xiaomi' ? 'Zepp Life / Mi Fitness' : 'Your watch app'})
+                                        </Text>
+                                    </View>
+                                    <View style={styles.reqItem}>
+                                        <Text style={[styles.reqNumber, { color: colors.primary }]}>2.</Text>
+                                        <Text style={[styles.reqText, { color: colors.text }]}>
+                                            Go to Profile → Settings → Link with Google Fit
+                                        </Text>
+                                    </View>
+                                    <View style={styles.reqItem}>
+                                        <Text style={[styles.reqNumber, { color: colors.primary }]}>3.</Text>
+                                        <Text style={[styles.reqText, { color: colors.text }]}>
+                                            Open Google Fit → Profile → Settings → Manage connected apps → Enable Health Connect
+                                        </Text>
+                                    </View>
+                                    <View style={styles.reqItem}>
+                                        <Text style={[styles.reqNumber, { color: colors.primary }]}>4.</Text>
+                                        <Text style={[styles.reqText, { color: colors.text }]}>
+                                            Come back here and tap "Connect Health System"
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View style={styles.reqItem}>
-                                    <Text style={[styles.reqNumber, { color: colors.textMuted }]}>2.</Text>
-                                    <Text style={[styles.reqText, { color: colors.text }]}>Google Health Connect installed (we'll check this).</Text>
+                                <Text style={[styles.noteText, { color: colors.textMuted }]}>
+                                    Note: Data sync may take a few minutes after setup.
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={[styles.infoCard, { backgroundColor: colors.surfaceElevated }]}>
+                                <Ionicons name="information-circle-outline" size={24} color={colors.primary} style={{ marginBottom: 8 }} />
+                                <Text style={[styles.infoText, { color: colors.text }]}>
+                                    To sync your {WATCH_BRANDS.find(b => b.id === selectedBrand)?.name} watch:
+                                </Text>
+                                <View style={styles.requirementList}>
+                                    <View style={styles.reqItem}>
+                                        <Text style={[styles.reqNumber, { color: colors.textMuted }]}>1.</Text>
+                                        <Text style={[styles.reqText, { color: colors.text }]}>
+                                            Install the {WATCH_BRANDS.find(b => b.id === selectedBrand)?.name} app and pair your watch.
+                                        </Text>
+                                    </View>
+                                    <View style={styles.reqItem}>
+                                        <Text style={[styles.reqNumber, { color: colors.textMuted }]}>2.</Text>
+                                        <Text style={[styles.reqText, { color: colors.text }]}>
+                                            In the app's settings, enable "Health Connect" sync.
+                                        </Text>
+                                    </View>
+                                    <View style={styles.reqItem}>
+                                        <Text style={[styles.reqNumber, { color: colors.textMuted }]}>3.</Text>
+                                        <Text style={[styles.reqText, { color: colors.text }]}>
+                                            Return here and tap "Connect Health System".
+                                        </Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
+                        )}
 
                         <Pressable
                             style={[styles.checkboxRow, { borderColor: colors.border }]}
@@ -168,7 +218,7 @@ export default function ConnectDeviceScreen() {
                                 {hasBrandApp && <Ionicons name="checkmark" size={14} color="white" />}
                             </View>
                             <Text style={[styles.checkboxText, { color: colors.text }]}>
-                                I have the app installed and data is syncing to it.
+                                I've completed the setup steps above.
                             </Text>
                         </Pressable>
                     </View>
@@ -260,6 +310,11 @@ const styles = StyleSheet.create({
     reqItem: { flexDirection: 'row', gap: 8 },
     reqNumber: { fontWeight: '700' },
     reqText: { flex: 1, fontSize: 14, lineHeight: 20 },
+    noteText: {
+        fontSize: 12,
+        marginTop: 12,
+        fontStyle: 'italic',
+    },
     checkboxRow: {
         flexDirection: 'row',
         alignItems: 'center',

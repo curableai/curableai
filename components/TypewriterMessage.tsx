@@ -25,15 +25,19 @@ export const TypewriterMessage: React.FC<TypewriterMessageProps> = ({
         if (shouldAnimate) {
             // If we already displayed the full text, don't re-animate unless specific conditions (rare)
             // For this chat use case, safe to just start over if prop changes or mount
-            if (displayedText === text) return;
+            if (displayedText === text && text.length > 0) return;
 
             setDisplayedText('');
             currentIndexRef.current = 0;
 
             const animate = () => {
                 if (currentIndexRef.current < text.length) {
-                    setDisplayedText((prev) => prev + text.charAt(currentIndexRef.current));
-                    currentIndexRef.current += 1;
+                    const nextIndex = currentIndexRef.current + 1;
+                    const nextText = text.slice(0, nextIndex);
+
+                    setDisplayedText(nextText);
+                    currentIndexRef.current = nextIndex;
+
                     animationRef.current = setTimeout(animate, typingSpeed);
                 } else {
                     onComplete?.();

@@ -1,0 +1,257 @@
+// lib/unifiedHealthService.ts
+// Cross-platform health data service - prioritizing Android Health Connect
+
+import {
+    checkHealthConnectAvailability,
+    initializeHealthConnect,
+    readHealthData,
+    requestHealthConnectPermissions,
+    SdkAvailabilityStatus,
+} from '@/lib/healthConnect';
+import { supabase } from '@/lib/supabaseClient';
+import { Platform } from 'react-native';
+
+export interface HealthMetric {
+    id: string;
+    label: string;
+    value: string | number;
+    unit: string;
+    icon: string;
+    available: boolean;
+    source: 'watch' | 'checkin' | 'manual';
+}
+
+export interface UnifiedHealthData {
+    metrics: HealthMetric[];
+    isWatchConnected: boolean;
+    lastSyncTime: string | null;
+    availableMetricCount: number;
+}
+
+/**
+ * Get all available health metrics from watch + check-in data
+ */
+export async function getUnifiedHealthData(userId: string): Promise<UnifiedHealthData> {
+    const metrics: HealthMetric[] = [];
+    let isWatchConnected = false;
+    let lastSyncTime: string | null = null;
+
+    // 1. Try to get watch data (Health Connect on Android)
+    if (Platform.OS === 'android') {
+        const watchData = await fetchAndroidHealthData();
+        if (watchData) {
+            isWatchConnected = true;
+            lastSyncTime = new Date().toISOString();
+
+            // Heart Rate
+            if (watchData.heartRate?.records?.length > 0) {
+                const latestHR = watchData.heartRate.records[watchData.heartRate.records.length - 1];
+                const bpm = latestHR.samples?.[0]?.beatsPerMinute || 0;
+                if (bpm > 0) {
+                    metrics.push({
+                        id: 'heart_rate',
+                        label: 'Heart Rate',
+                        value: Math.round(bpm),
+                        unit: 'bpm',
+                        icon: 'heart-outline',
+                        available: true,
+                        source: 'watch',
+                    });
+                }
+            }
+
+            // HRV
+            if (watchData.hrv?.records?.length > 0) {
+                const latestHRV = watchData.hrv.records[watchData.hrv.records.length - 1];
+                if (latestHRV.heartRateVariabilityMillis) {
+                    metrics.push({
+                        id: 'hrv',
+                        label: 'HRV',
+                        value: Math.round(latestHRV.heartRateVariabilityMillis),
+                        unit: 'ms',
+                        icon: 'pulse-outline',
+                        available: true,
+                        source: 'watch',
+                    });
+                }
+            }
+
+            // Steps
+            if (watchData.steps?.records?.length > 0) {
+                const totalSteps = watchData.steps.records.reduce(
+                    (sum: number, record: any) => sum + (record.count || 0),
+                    0
+                );
+                if (totalSteps > 0) {
+                    metrics.push({
+                        id: 'steps',
+                        label: 'Steps',
+                        value: totalSteps.toLocaleString(),
+                        unit: 'steps',
+                        icon: 'walk-outline',
+                        available: true,
+                        source: 'watch',
+                    });
+                }
+            }
+
+            // SpO2 (Oxygen Saturation)
+            if (watchData.oxygenSaturation?.records?.length > 0) {
+                const latestSpO2 = watchData.oxygenSaturation.records[watchData.oxygenSaturation.records.length - 1];
+                if (latestSpO2.percentage) {
+                    metrics.push({
+                        id: 'spo2',
+                        label: 'SpO2',
+                        value: Math.round(latestSpO2.percentage * 100),
+                        unit: '%',
+                        icon: 'water-outline',
+                        available: true,
+                        source: 'watch',
+                    });
+                }
+            }
+
+            // Respiratory Rate
+            if (watchData.respiratoryRate?.records?.length > 0) {
+                const latestRR = watchData.respiratoryRate.records[watchData.respiratoryRate.records.length - 1];
+                if (latestRR.rate) {
+                    metrics.push({
+                        id: 'respiratory_rate',
+                        label: 'Resp. Rate',
+                        value: Math.round(latestRR.rate),
+                        unit: 'brpm',
+                        icon: 'fitness-outline',
+                        available: true,
+                        source: 'watch',
+                    });
+                }
+            }
+
+            // Sleep (convert to hours)
+            if (watchData.sleep?.records?.length > 0) {
+                let totalSleepMs = 0;
+                watchData.sleep.records.forEach((session: any) => {
+                    if (session.startTime && session.endTime) {
+                        totalSleepMs += new Date(session.endTime).getTime() - new Date(session.startTime).getTime();
+                    }
+                });
+                const sleepHours = totalSleepMs / (1000 * 60 * 60);
+                if (sleepHours > 0) {
+                    metrics.push({
+                        id: 'sleep',
+                        label: 'Sleep',
+                        value: sleepHours.toFixed(1),
+                        unit: 'hrs',
+                        icon: 'moon-outline',
+                        available: true,
+                        source: 'watch',
+                    });
+                }
+            }
+        }
+    }
+
+    // 2. Get BP from daily check-in (signals table)
+    const bpData = await fetchBPFromCheckin(userId);
+    if (bpData) {
+        metrics.push({
+            id: 'blood_pressure',
+            label: 'Blood Pressure',
+            value: bpData,
+            unit: 'mmHg',
+            icon: 'thermometer-outline',
+            available: true,
+            source: 'checkin',
+        });
+    }
+
+    return {
+        metrics,
+        isWatchConnected,
+        lastSyncTime,
+        availableMetricCount: metrics.filter(m => m.available).length,
+    };
+}
+
+/**
+ * Fetch health data from Android Health Connect
+ */
+async function fetchAndroidHealthData() {
+    try {
+        const status = await checkHealthConnectAvailability();
+        if (status !== SdkAvailabilityStatus.SDK_AVAILABLE) {
+            console.log('[HealthConnect] SDK not available, status:', status);
+            return null;
+        }
+
+        const initialized = await initializeHealthConnect();
+        if (!initialized) {
+            console.log('[HealthConnect] Failed to initialize');
+            return null;
+        }
+
+        // Request permissions if needed
+        const hasPermissions = await requestHealthConnectPermissions();
+        if (!hasPermissions) {
+            console.log('[HealthConnect] Permissions not granted');
+            return null;
+        }
+
+        const data = await readHealthData();
+        console.log('[HealthConnect] Data fetched:', Object.keys(data || {}));
+        return data;
+    } catch (error) {
+        console.error('[HealthConnect] Error fetching data:', error);
+        return null;
+    }
+}
+
+/**
+ * Fetch Blood Pressure from daily check-in signals
+ */
+async function fetchBPFromCheckin(userId: string): Promise<string | null> {
+    try {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+
+        // Check for BP systolic signal
+        const { data: systolicData } = await supabase
+            .from('signals')
+            .select('value')
+            .eq('user_id', userId)
+            .eq('signal_id', 'blood_pressure_systolic')
+            .gte('created_at', todayStart.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        const { data: diastolicData } = await supabase
+            .from('signals')
+            .select('value')
+            .eq('user_id', userId)
+            .eq('signal_id', 'blood_pressure_diastolic')
+            .gte('created_at', todayStart.toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1);
+
+        if (systolicData?.[0]?.value && diastolicData?.[0]?.value) {
+            return `${systolicData[0].value}/${diastolicData[0].value}`;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('[BP Checkin] Error:', error);
+        return null;
+    }
+}
+
+/**
+ * Check if Health Connect is available and configured
+ */
+export async function isHealthServiceAvailable(): Promise<boolean> {
+    if (Platform.OS === 'android') {
+        const status = await checkHealthConnectAvailability();
+        return status === SdkAvailabilityStatus.SDK_AVAILABLE;
+    }
+    // iOS: Will implement HealthKit check later
+    return false;
+}

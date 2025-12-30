@@ -2,9 +2,8 @@ import { CURABLE_AI_SYSTEM_PROMPT, getAIPromptMetadata } from '@/lib/ai-prompt';
 import { clinicalSignalService as signalCaptureService } from '@/services/clinicalSignalCapture';
 import { supabase } from './supabaseClient';
 
-// Get API key from environment variables
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+// Backend AI Configuration
+const EDGE_FUNCTION_NAME = 'clinical-ai';
 
 // ==================== TYPES ====================
 
@@ -144,73 +143,16 @@ export async function getUserHealthProfile(userId: string): Promise<UserHealthPr
 
 export async function analyzeHealthWithOpenAI(userId: string): Promise<AIHealthInsight[]> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: { action: 'analyze', userId }
+    });
+
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
       return [];
     }
 
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return [];
-
-    const systemPrompt = `You are an expert AI health analyst for Curable, a personalized health monitoring app.
-
-Your job is to analyze the user's complete health data and provide:
-1. Health alerts (significant changes that need attention)
-2. Insights (patterns and observations)
-3. Predictions (what might happen based on current trends)
-4. Recommendations (actionable advice)
-
-IMPORTANT RULES:
-- Be empathetic and encouraging
-- Use the person's name when appropriate
-- Reference their specific conditions and medications
-- Consider their age, gender, and lifestyle
-- Prioritize safety - flag anything concerning
-- Give specific, actionable advice
-- Be conversational and natural, not robotic
-
-Return a JSON array of insights. Each insight must have:
-{
-  "type": "alert" | "insight" | "prediction" | "recommendation",
-  "severity": "low" | "medium" | "high" | "critical",
-  "title": "Short title",
-  "message": "Detailed message (2-3 sentences)",
-  "reasoning": "Why this matters for THIS specific user",
-  "recommendations": ["Action 1", "Action 2"],
-  "relatedMetrics": ["metric1", "metric2"]
-}`;
-
-    const userPrompt = buildHealthAnalysisPrompt(profile);
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
-    const parsed = JSON.parse(content);
-
-    return parsed.insights || [];
+    return data.insights || [];
   } catch (error) {
     console.error('Error analyzing health with OpenAI:', error);
     return [];
@@ -224,78 +166,16 @@ export async function generateContextualQuestion(
   anomaly: { metric: string; value: number; change: number }
 ): Promise<ContextualQuestion | null> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: { action: 'generate_question', userId, payload: { anomaly } }
+    });
+
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
       return null;
     }
 
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return null;
-
-    const systemPrompt = `You are Curable's AI health assistant. A health metric changed significantly.
-
-Generate a personalized, empathetic question to understand what caused this change.
-
-RULES:
-- Use the person's name
-- Reference their chronic conditions or medications if relevant
-- Be conversational and caring
-- Suggest 3-5 possible triggers based on their profile
-- Indicate urgency level
-
-Return JSON:
-{
-  "question": "The main question to ask (warm, personal)",
-  "context": "Why you're asking (1 sentence)",
-  "possibleTriggers": ["trigger1", "trigger2", "trigger3"],
-  "urgency": "low" | "medium" | "high"
-}`;
-
-    const userPrompt = `
-USER PROFILE:
-Name: ${profile.fullName}
-Age: ${calculateAge(profile.dateOfBirth)} years
-Gender: ${profile.gender}
-Chronic Conditions: ${profile.chronicConditions.join(', ') || 'None'}
-Medications: ${profile.longTermMedications.join(', ') || 'None'}
-Smoker: ${profile.smoker ? 'Yes' : 'No'}
-Alcohol: ${profile.alcoholDrinker ? 'Yes' : 'No'}
-
-ANOMALY DETECTED:
-Metric: ${anomaly.metric}
-Current Value: ${anomaly.value}
-Change: ${anomaly.change > 0 ? '+' : ''}${anomaly.change}%
-
-Generate a contextual question for this user.`;
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.8,
-        max_tokens: 500,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error('OpenAI API error');
-    }
-
-    const data = await response.json();
-    const parsed = JSON.parse(data.choices[0].message.content);
-
-    return parsed;
+    return data;
   } catch (error) {
     console.error('Error generating contextual question:', error);
     return null;
@@ -311,67 +191,26 @@ export async function learnFromAnswer(
   metric: string
 ): Promise<{ triggers: string[]; insights: string }> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: {
+        action: 'learn',
+        userId,
+        payload: { question, answer, metric }
+      }
+    });
+
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
       return { triggers: [], insights: '' };
     }
 
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return { triggers: [], insights: '' };
-
-    const systemPrompt = `You are Curable's AI learning engine. 
-
-A user answered a question about a health change. Extract:
-1. Specific triggers (activities, foods, behaviors that caused the change)
-2. Insights for future predictions
-
-Return JSON:
-{
-  "triggers": ["trigger1", "trigger2"],
-  "insights": "What we learned and how to use it (1 paragraph)"
-}`;
-
-    const userPrompt = `
-USER: ${profile.fullName}
-METRIC AFFECTED: ${metric}
-QUESTION ASKED: ${question}
-USER'S ANSWER: ${answer}
-
-Extract triggers and insights.`;
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.6,
-        max_tokens: 300,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error('OpenAI API error');
+    // Save triggers to database (client-side for now as per original code pattern, 
+    // but the AI extraction happened on backend)
+    if (data.triggers && data.triggers.length > 0) {
+      await saveTriggers(userId, data.triggers, metric);
     }
 
-    const data = await response.json();
-    const parsed = JSON.parse(data.choices[0].message.content);
-
-    // Save triggers to database
-    if (parsed.triggers && parsed.triggers.length > 0) {
-      await saveTriggers(userId, parsed.triggers, metric);
-    }
-
-    return parsed;
+    return data;
   } catch (error) {
     console.error('Error learning from answer:', error);
     return { triggers: [], insights: '' };
@@ -382,68 +221,16 @@ Extract triggers and insights.`;
 
 export async function generatePredictions(userId: string): Promise<any[]> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: { action: 'predictions', userId }
+    });
+
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
       return [];
     }
 
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return [];
-
-    // Get learned triggers
-    const { data: triggers } = await supabase
-      .from('user_triggers')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('confidence', 0.6)
-      .order('confidence', { ascending: false });
-
-    if (!triggers || triggers.length === 0) return [];
-
-    const systemPrompt = `You are Curable's predictive health AI.
-
-Based on the user's learned patterns and current health data, predict what might happen next.
-
-Return JSON array:
-[{
-  "metric": "metric_name",
-  "prediction": "what will likely happen",
-  "confidence": 0.75,
-  "timeframe": "2-4 hours",
-  "reasoning": "why this will happen",
-  "prevention": ["how to prevent if negative", "or how to maintain if positive"]
-}]`;
-
-    const userPrompt = buildPredictionPrompt(profile, triggers);
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-        max_tokens: 1500,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error('OpenAI API error');
-    }
-
-    const data = await response.json();
-    const parsed = JSON.parse(data.choices[0].message.content);
-
-    return parsed.predictions || [];
+    return data.predictions || [];
   } catch (error) {
     console.error('Error generating predictions:', error);
     return [];
@@ -454,74 +241,16 @@ Return JSON array:
 
 export async function generateHealthSummary(userId: string): Promise<string> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
-      return 'Unable to generate summary - OpenAI API key is not configured.';
-    }
-
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return 'Unable to generate summary - no health data available.';
-
-    const systemPrompt = `You are Curable's health advisory AI generating a comprehensive report.
-
-Generate a personalized health ADVISORY (NOT diagnosis) that includes:
-1. Executive Summary (2-3 sentences)
-2. Current Health Status (all metrics with interpretation)
-3. Observations & Patterns (what's notable, good or concerning)
-4. Risk Factors (personalized based on conditions, family history)
-5. Trends & Changes (what's improving/declining)
-6. Personalized Recommendations (specific to THIS user)
-7. Suggested Next Steps (prioritized actions)
-
-CRITICAL RULES:
-- This is ADVISORY, not diagnosis
-- Never use: "you have", "diagnosis", "this confirms"
-- Use: "may indicate", "could suggest", "patterns consistent with"
-- Always give 2-4 possibilities, never just one
-- Be honest about concerns but not alarmist
-- Focus on actionable insights
-
-TONE:
-- Professional but warm and encouraging
-- Use the person's name
-- Celebrate improvements
-- Be specific with numbers from their data
-
-FORMAT:
-- Clear headers with emojis
-- Bullet points for readability
-- Reference conditions/medications when relevant
-
-INCLUDE DISCLAIMER:
-"⚠️ IMPORTANT: This is health advisory, not medical diagnosis. Always consult a healthcare professional for medical decisions."`;
-
-    const userPrompt = buildDiagnosisPrompt(profile);
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 3000,
-      }),
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: { action: 'summary', userId }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error('OpenAI API error');
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
+      return 'Unable to generate summary at this time.';
     }
 
-    const data = await response.json();
-    return data.choices[0].message.content;
+    return data;
   } catch (error) {
     console.error('Error generating summary:', error);
     return 'Unable to generate comprehensive summary at this time.';
@@ -541,106 +270,16 @@ export async function analyzeMedicationsWithAI(
   confidence: number;
 } | null> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
-      return null;
-    }
-
-    if (medications.length === 0) {
-      return null;
-    }
-
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return null;
-
-    const systemPrompt = `You are Curable's AI medication analyst, integrated with the diagnosis and prediction systems.
-
-Analyze the user's medications considering their complete health profile, existing conditions, and other medications.
-
-CRITICAL RULES:
-- Consider drug interactions with existing medications
-- Factor in chronic conditions and contraindications
-- Reference age, gender, and health metrics
-- Integrate with diagnosis and prediction insights
-- Be specific about percentages and likelihoods
-- Prioritize safety warnings
-- Give actionable, personalized recommendations
-
-Return JSON:
-{
-  "effects": ["expected effect 1", "expected effect 2", ...],
-  "sideEffects": ["side effect with likelihood %", ...],
-  "interactions": ["interaction or safety note", ...],
-  "recommendations": ["specific actionable advice", ...],
-  "confidence": 85
-}`;
-
-    const medicationList = medications.map(m => `${m.name} ${m.dosage} - ${m.frequency}`).join('\n');
-
-    const userPrompt = `
-PATIENT PROFILE:
-Name: ${profile.fullName}
-Age: ${calculateAge(profile.dateOfBirth)} years
-Gender: ${profile.gender}
-Weight: ${profile.weightKg} kg
-Height: ${profile.heightCm} cm
-BMI: ${calculateBMI(profile.heightCm, profile.weightKg).toFixed(1)}
-
-EXISTING CONDITIONS:
-${profile.chronicConditions.length > 0 ? profile.chronicConditions.join(', ') : 'None reported'}
-
-CURRENT MEDICATIONS:
-${profile.longTermMedications.length > 0 ? profile.longTermMedications.join(', ') : 'None reported'}
-
-LIFESTYLE:
-- Smoker: ${profile.smoker ? 'Yes ⚠️' : 'No'}
-- Alcohol: ${profile.alcoholDrinker ? 'Yes' : 'No'}
-
-CURRENT HEALTH METRICS:
-- Heart Rate: ${profile.heartRate || 'N/A'} bpm
-- Resting HR: ${profile.restingHeartRate || 'N/A'} bpm
-- Blood Pressure: Monitor for medication effects
-- Activity Level: ${profile.steps || 'N/A'} steps/day
-
-NEW MEDICATIONS TO ANALYZE:
-${medicationList}
-
-Provide comprehensive analysis considering this specific patient's profile. Include percentage likelihoods for side effects.`;
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: { action: 'medications', userId, payload: { medications } }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error('OpenAI API error');
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
+      return null;
     }
 
-    const data = await response.json();
-    const parsed = JSON.parse(data.choices[0].message.content);
-
-    return {
-      effects: parsed.effects || [],
-      sideEffects: parsed.sideEffects || [],
-      interactions: parsed.interactions || [],
-      recommendations: parsed.recommendations || [],
-      confidence: parsed.confidence || 85,
-    };
+    return data;
   } catch (error) {
     console.error('Error analyzing medications:', error);
     return null;
@@ -651,148 +290,16 @@ Provide comprehensive analysis considering this specific patient's profile. Incl
 
 export async function generateDoctorReviewSummary(userId: string): Promise<any> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: { action: 'doctor_summary', userId }
+    });
+
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
       return null;
     }
 
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return null;
-
-    // Get AI insights and predictions
-    const insights = await analyzeHealthWithOpenAI(userId);
-    const summary = await generateHealthSummary(userId);
-
-    // Get medications if available
-    const { data: medications } = await supabase
-      .from('medications')
-      .select('*')
-      .eq('user_id', userId);
-
-    const systemPrompt = `You are a medical AI assistant preparing a professional summary for a doctor to review.
-
-Generate a comprehensive, structured medical summary suitable for physician review.
-
-CRITICAL RULES:
-- Use professional medical terminology
-- Organize information clearly and concisely
-- Highlight concerning trends and urgent findings
-- Include specific metrics and dates
-- Format for easy scanning by busy physicians
-- Be objective and evidence-based
-
-Return JSON:
-{
-  "executiveSummary": "2-3 sentence overview of patient's current health status",
-  "keyFindings": ["Finding 1", "Finding 2", ...],
-  "concerningTrends": ["Trend 1 with specific metrics", ...],
-  "recommendations": ["Recommendation 1", "Recommendation 2", ...],
-  "urgencyLevel": "routine" | "moderate" | "urgent"
-}`;
-
-    const userPrompt = `
-PATIENT SUMMARY FOR PHYSICIAN REVIEW
-
-DEMOGRAPHICS:
-Name: ${profile.fullName}
-Age: ${calculateAge(profile.dateOfBirth)} years
-Gender: ${profile.gender}
-Blood Type: ${profile.bloodGroup}
-
-MEDICAL HISTORY:
-Chronic Conditions: ${profile.chronicConditions.length > 0 ? profile.chronicConditions.join(', ') : 'None'}
-Long-term Medications: ${profile.longTermMedications.length > 0 ? profile.longTermMedications.join(', ') : 'None'}
-Family History: ${profile.familyHistory.length > 0 ? profile.familyHistory.join(', ') : 'None'}
-Smoker: ${profile.smoker ? 'Yes' : 'No'}
-Alcohol Use: ${profile.alcoholDrinker ? 'Yes' : 'No'}
-
-CURRENT MEDICATIONS:
-${medications && medications.length > 0
-        ? medications.map((m: any) => `- ${m.medication_name} ${m.dosage} (${m.frequency})`).join('\n')
-        : 'No current medications recorded'}
-
-VITAL SIGNS & METRICS (Current):
-- Heart Rate: ${profile.heartRate || 'N/A'} bpm
-- Resting Heart Rate: ${profile.restingHeartRate || 'N/A'} bpm
-- HRV: ${profile.hrv || 'N/A'} ms
-- Daily Steps: ${profile.steps || 'N/A'}
-- Walking Speed: ${profile.walkingSpeed || 'N/A'} km/h
-- Walking Steadiness: ${profile.walkingSteadiness || 'N/A'}%
-- Walking Asymmetry: ${profile.walkingAsymmetry || 'N/A'}%
-
-HISTORICAL DATA:
-${profile.historicalMetrics.length} days of continuous monitoring data available
-${generateHistoricalSummary(profile.historicalMetrics)}
-
-AI HEALTH INSIGHTS:
-${insights.length > 0 ? insights.map((i: any) =>
-          `- [${i.severity.toUpperCase()}] ${i.title}: ${i.message}`
-        ).join('\n') : 'No significant AI insights at this time'}
-
-AI COMPREHENSIVE SUMMARY:
-${summary}
-
-Generate a professional medical summary for physician review.`;
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error('OpenAI API error');
-    }
-
-    const data = await response.json();
-    const aiSummary = JSON.parse(data.choices[0].message.content);
-
-    // Return complete summary with all data
-    return {
-      patient: {
-        name: profile.fullName,
-        age: calculateAge(profile.dateOfBirth),
-        gender: profile.gender,
-        bloodGroup: profile.bloodGroup,
-        dateOfBirth: profile.dateOfBirth,
-      },
-      medicalHistory: {
-        chronicConditions: profile.chronicConditions,
-        longTermMedications: profile.longTermMedications,
-        familyHistory: profile.familyHistory,
-        smoker: profile.smoker,
-        alcoholDrinker: profile.alcoholDrinker,
-      },
-      currentMedications: medications || [],
-      vitalSigns: {
-        heartRate: profile.heartRate,
-        restingHeartRate: profile.restingHeartRate,
-        hrv: profile.hrv,
-        steps: profile.steps,
-        walkingSpeed: profile.walkingSpeed,
-        walkingSteadiness: profile.walkingSteadiness,
-        walkingAsymmetry: profile.walkingAsymmetry,
-      },
-      metricsHistory: profile.historicalMetrics,
-      aiInsights: insights,
-      aiHealthSummary: summary,
-      aiSummary: aiSummary,
-      generatedAt: new Date().toISOString(),
-    };
+    return data;
   } catch (error) {
     console.error('Error generating doctor review summary:', error);
     return null;
@@ -811,13 +318,6 @@ export async function chatWithHealthAI(
   extremeSignals?: any[];
 }> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
-      return {
-        message: "I'm unable to connect right now. Please check your API key configuration.",
-        hasExtremeFlags: false
-      };
-    }
 
     const profile = await getUserHealthProfile(userId);
     if (!profile) {
@@ -832,6 +332,12 @@ export async function chatWithHealthAI(
     const extremeSignals = recentSignals.filter(s => s.safetyAlertLevel === 'extreme');
     const hasExtremeFlags = extremeSignals.length > 0;
 
+    // ✅ FETCH DETAILED CONTEXT (Medications & Check-ins)
+    const [medications, checkinTrends] = await Promise.all([
+      getDetailedMedications(userId),
+      getCheckinTrends(userId)
+    ]);
+
     // ✅ USE THE SAFE PROMPT (from ai-prompt.ts)
     let systemPrompt = CURABLE_AI_SYSTEM_PROMPT;
 
@@ -842,8 +348,16 @@ export async function chatWithHealthAI(
     systemPrompt += `Gender: ${profile.gender}\n`;
     systemPrompt += `Location: ${profile.location}\n`;
     systemPrompt += `Chronic Conditions: ${profile.chronicConditions.join(', ') || 'None'}\n`;
-    systemPrompt += `Medications: ${profile.longTermMedications.join(', ') || 'None'}\n`;
+
+    // Detailed Medications
+    systemPrompt += `Medications: ${medications.length > 0 ? medications.map(m => `${m.name} (${m.dosage}, ${m.frequency})`).join(', ') : 'None reported'}\n`;
+
     systemPrompt += `Family History: ${profile.familyHistory.join(', ') || 'None'}\n\n`;
+
+    // Check-in Trends
+    if (checkinTrends) {
+      systemPrompt += `DAILY CHECK-IN TRENDS (Last 7 days):\n${checkinTrends}\n\n`;
+    }
 
     systemPrompt += `CURRENT HEALTH METRICS:\n`;
     systemPrompt += `- Heart Rate: ${profile.heartRate || 'N/A'} bpm\n`;
@@ -876,27 +390,25 @@ export async function chatWithHealthAI(
       { role: 'user', content: message },
     ];
 
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: messages,
-        temperature: 0.8,
-        max_tokens: 500,
-      }),
+    // ✅ CALL SMART AI CONTROLLER (BACKEND)
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: {
+        action: 'chat',
+        userId,
+        message,
+        history: conversationHistory,
+        context: {
+          hasExtremeFlags,
+          extremeSignals: hasExtremeFlags ? extremeSignals : []
+        }
+      }
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw new Error('OpenAI API error');
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
+      throw new Error('Failed to connect to AI backend');
     }
 
-    const data = await response.json();
     const aiMessage = data.choices[0].message.content;
 
     // ✅ VALIDATE RESPONSE
@@ -923,6 +435,71 @@ export async function chatWithHealthAI(
     };
   }
 }
+
+// ==================== NEW HELPER FUNCTIONS ====================
+
+async function getDetailedMedications(userId: string): Promise<any[]> {
+  try {
+    // Fetch from medications table as requested by user
+    const { data, error } = await supabase
+      .from('medications')
+      .select('medication_name, dosage, frequency')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    return data?.map(m => ({
+      name: m.medication_name,
+      dosage: m.dosage,
+      frequency: m.frequency
+    })) || [];
+  } catch (e) {
+    console.error('Error fetching meds:', e);
+    return [];
+  }
+}
+
+async function getCheckinTrends(userId: string): Promise<string> {
+  try {
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+
+    // Fetch from daily_checkins table as requested by user
+    const { data: checkins, error } = await supabase
+      .from('daily_checkins')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('checkin_date', threeDaysAgo.toISOString().split('T')[0])
+      .order('checkin_date', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching checkins:', error);
+      return '';
+    }
+
+    if (!checkins || checkins.length === 0) return '';
+
+    // Format for AI context
+    const lines: string[] = [];
+    checkins.forEach(c => {
+      lines.push(`📅 ${c.checkin_date}:`);
+      lines.push(`  - Lifestyle Score: ${c.lifestyle_score}/100`);
+      lines.push(`  - Mood: ${c.mood}`);
+      lines.push(`  - Stress: ${c.stress_level}`);
+      lines.push(`  - Sleep: ${c.sleep_quality}`);
+      lines.push(`  - Energy: ${c.energy_level}`);
+      if (c.insights && Array.isArray(c.insights)) {
+        lines.push(`  - Insights: ${c.insights.join(', ')}`);
+      }
+    });
+
+    return lines.join('\n');
+  } catch (e) {
+    console.error('Error fetching checkin trends:', e);
+    return '';
+  }
+}
+
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -1155,74 +732,25 @@ export async function interpretClinicalDocument(
   urgency: 'low' | 'medium' | 'high';
 } | null> {
   try {
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API key is not configured');
+    console.log(`Analyzing document: ${fileName} for user: ${userId}`);
+
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: {
+        action: 'interpret_document',
+        userId,
+        payload: {
+          fileName,
+          documentData: base64Image
+        }
+      }
+    });
+
+    if (functionError) {
+      console.error('Edge Function error:', functionError);
       return null;
     }
 
-    const profile = await getUserHealthProfile(userId);
-    if (!profile) return null;
-
-    const systemPrompt = `You are Curable's medical document specialist AI. Your task is to analyze clinical documents (lab results, prescriptions, imaging reports) and interpret them for the user.
-
-RULES:
-- Be precise but use accessible language
-- Identify abnormal values
-- Contextualize findings based on the user's health profile
-- NEVER diagnose; use advisory language
-- Flag items that require immediate clinical attention
-
-Return JSON:
-{
-  "summary": "1-2 sentence overview of the document",
-  "keyFindings": ["Finding 1 (abnormal values highlighted)", "Finding 2"],
-  "recommendations": ["Actionable step 1", "Actionable step 2"],
-  "urgency": "low" | "medium" | "high"
-}`;
-
-    const userPrompt = [
-      {
-        type: "text",
-        text: `Patient: ${profile.fullName}\nAge: ${calculateAge(profile.dateOfBirth)}\nConditions: ${profile.chronicConditions.join(', ')}\n\nPlease interpret this medical document: ${fileName}`
-      },
-      {
-        type: "image_url",
-        image_url: {
-          url: `data:image/jpeg;base64,${base64Image}`
-        }
-      }
-    ];
-
-    console.log(`Analyzing document: ${fileName} for user: ${userId}`);
-    console.log(`Base64 string length: ${base64Image.length}`);
-
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt as any }, // casting because of mixed content type
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1, // Low temperature for higher accuracy in factual reading
-        max_tokens: 1500,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI Document Error: ${response.status} - ${errorText}`);
-      throw new Error(`OpenAI error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('OpenAI interpreted document successfully');
-    return JSON.parse(data.choices[0].message.content);
+    return data;
   } catch (error) {
     console.error('Error interpreting document:', error);
     return null;

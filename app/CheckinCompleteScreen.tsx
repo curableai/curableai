@@ -146,31 +146,6 @@ export default function CheckinCompleteScreen() {
                     )}
                 </View>
 
-                {/* Insights List */}
-                {insights && insights.length > 0 && (
-                    <View style={styles.insightsList}>
-                        <Text style={[styles.insightsTitle, { color: colors.text }]}>
-                            Focus Areas
-                        </Text>
-                        {insights.map((insight: string, index: number) => (
-                            <View
-                                key={index}
-                                style={[
-                                    styles.insightItem,
-                                    {
-                                        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
-                                        borderLeftColor: colors.primary
-                                    }
-                                ]}
-                            >
-                                <Text style={[styles.insightText, { color: colors.text }]}>
-                                    {insight}
-                                </Text>
-                            </View>
-                        ))}
-                    </View>
-                )}
-
                 {/* Actions */}
                 <View style={styles.actions}>
                     <TouchableOpacity
@@ -311,6 +286,12 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         marginBottom: 16,
         letterSpacing: -0.3
+    },
+    insightTitle: {
+        fontSize: 14,
+        fontWeight: '700',
+        marginBottom: 4,
+        opacity: 0.9
     },
     insightItem: {
         padding: 16,

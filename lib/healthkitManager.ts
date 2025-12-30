@@ -1,9 +1,9 @@
 // lib/healthKitManager.ts
 import { supabase } from '@/lib/supabaseClient';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Platform } from 'react-native';
+import { secureStoreService } from './secureStoreService';
 
-const HEALTHKIT_PERMISSION_PREFIX = '@healthkit_permission_';
+const HEALTHKIT_PERMISSION_PREFIX = 'healthkit_permission_';
 
 export interface HealthData {
   steps: number;
@@ -28,7 +28,7 @@ export const hasRequestedHealthKitPermissions = async (userId?: string): Promise
     }
 
     const key = `${HEALTHKIT_PERMISSION_PREFIX}${userId}`;
-    const value = await AsyncStorage.getItem(key);
+    const value = await secureStoreService.get(key);
     return value === 'true';
   } catch (error) {
     console.error('Error checking HealthKit permission status:', error);
@@ -42,7 +42,7 @@ export const hasRequestedHealthKitPermissions = async (userId?: string): Promise
 const setHealthKitPermissionsRequested = async (userId: string): Promise<void> => {
   try {
     const key = `${HEALTHKIT_PERMISSION_PREFIX}${userId}`;
-    await AsyncStorage.setItem(key, 'true');
+    await secureStoreService.save(key, 'true');
   } catch (error) {
     console.error('Error saving HealthKit permission status:', error);
   }
@@ -68,7 +68,7 @@ export const requestHealthKitPermissions = async (userId?: string, force: boolea
 
     // Check if we've already requested permissions for this user
     const hasRequested = await hasRequestedHealthKitPermissions(userId);
-    
+
     if (hasRequested && !force) {
       console.log('HealthKit permissions already requested for this user');
       return true;
@@ -113,7 +113,7 @@ export const requestHealthKitPermissions = async (userId?: string, force: boolea
 const requestHealthKitPermissionsNative = async (): Promise<boolean> => {
   try {
     console.log('Requesting HealthKit permissions...');
-    
+
     // TODO: Replace with actual HealthKit permission request
     // Example using react-native-health or @kingstinct/react-native-healthkit:
     // 
@@ -184,7 +184,7 @@ export const fetchHealthData = async (): Promise<HealthData | null> => {
 
   try {
     console.log('Fetching HealthKit data...');
-    
+
     // TODO: Replace with actual HealthKit data fetching
     // Example:
     // const options = {
@@ -258,7 +258,7 @@ export const uploadHealthData = async (
 export const syncHealthData = async (userId: string): Promise<boolean> => {
   try {
     const healthData = await fetchHealthData();
-    
+
     if (!healthData) {
       console.log('No health data to sync');
       return false;
@@ -279,25 +279,25 @@ export const syncHealthData = async (userId: string): Promise<boolean> => {
 export const initializeHealthKit = async (userId?: string): Promise<void> => {
   try {
     const available = await isHealthKitAvailable();
-    
+
     if (!available) {
       console.log('HealthKit not available on this device');
       return;
     }
 
     const hasRequested = await hasRequestedHealthKitPermissions();
-    
+
     if (!hasRequested) {
       console.log('First time - requesting HealthKit permissions');
       const granted = await requestHealthKitPermissions();
-      
+
       if (granted && userId) {
         // Fetch and sync initial data
         await syncHealthData(userId);
       }
     } else {
       console.log('HealthKit permissions already requested');
-      
+
       // Still try to sync data if user has granted permissions
       if (userId) {
         await syncHealthData(userId);

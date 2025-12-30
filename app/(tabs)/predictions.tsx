@@ -45,10 +45,42 @@ export default function InsightsScreen() {
             const profile = await getUserHealthProfile(user.id);
             if (profile) setUserName(profile.fullName.split(' ')[0]);
 
+            // Fetch recent check-ins for the summary card
+            const { data: checkinHistory } = await supabase
+                .from('daily_checkins')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('checkin_date', { ascending: false })
+                .limit(7);
+
             const signals = ['general_wellbeing', 'energy_level', 'sleep_quality', 'body_temperature', 'blood_pressure_systolic'];
             const generatedInsights: InsightCard[] = [];
 
-            for (const sigId of signals) {
+            // Process specific check-in signals from daily_checkins table
+            if (checkinHistory && checkinHistory.length > 0) {
+                const latest = checkinHistory[0];
+
+                // Mood
+                if (latest.mood) {
+                    const moodTrend = calculateCategoricalTrendFromHistory(checkinHistory, 'mood');
+                    generatedInsights.push(mapCheckinToInsight('general_wellbeing', latest.mood, moodTrend));
+                }
+
+                // Energy
+                if (latest.energy_level) {
+                    const energyTrend = calculateCategoricalTrendFromHistory(checkinHistory, 'energy_level');
+                    generatedInsights.push(mapCheckinToInsight('energy_level', latest.energy_level, energyTrend));
+                }
+
+                // Sleep
+                if (latest.sleep_quality) {
+                    const sleepTrend = calculateCategoricalTrendFromHistory(checkinHistory, 'sleep_quality');
+                    generatedInsights.push(mapCheckinToInsight('sleep_quality', latest.sleep_quality, sleepTrend));
+                }
+            }
+
+            // Still check clinical signals for BP/Temp
+            for (const sigId of ['body_temperature', 'blood_pressure_systolic']) {
                 const history = await clinicalSignalService.getSignalHistory(user.id, sigId, 7);
                 const latest = await clinicalSignalService.getLatestSignal(user.id, sigId);
 
@@ -60,13 +92,19 @@ export default function InsightsScreen() {
 
             // Default if no data
             if (generatedInsights.length === 0) {
+                const checkinCount = checkinHistory?.length || 0;
+                const daysNeeded = 3;
+                const daysLeft = Math.max(0, daysNeeded - checkinCount);
+
                 generatedInsights.push({
-                    title: 'No Data Yet',
-                    value: 'Start Check-in',
+                    title: daysLeft > 0 ? `${daysLeft} Days to Unlock` : 'No Data Yet',
+                    value: daysLeft > 0 ? 'Building Trends...' : 'Start Check-in',
                     trend: 'stable',
                     color: colors.textMuted,
                     icon: 'calendar',
-                    description: 'Complete your daily check-in to see your health trends here.'
+                    description: daysLeft > 0
+                        ? `Keep checking in! ${daysLeft} more days needed to generate your personalized health trends.`
+                        : 'Complete your daily check-in to see your health trends here.'
                 });
             }
 

@@ -1,4 +1,5 @@
 // app/_layout.tsx
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { handleNotificationResponse, requestNotificationPermissions, scheduleDailyCheckin } from '@/lib/checkinNotification';
 import { initializeHealthKit } from '@/lib/healthkitManager';
 import { supabase } from '@/lib/supabaseClient';
@@ -118,13 +119,13 @@ export default function RootLayout() {
       if (inAuthScreen) {
         // Redirect away from auth screens after login
         if (userRole === 'doctor') {
-          router.replace('/dashboard');
+          router.replace('/(doctor)/dashboard' as any);
         } else {
           router.replace('/ai-assistant');
         }
       } else if (userRole === 'doctor' && inPatientGroup) {
         // Doctor accidentally in patient area
-        router.replace('/dashboard');
+        router.replace('/(doctor)/dashboard' as any);
       } else if (userRole === 'patient' && inDoctorGroup) {
         // Patient accidentally in doctor area
         router.replace('/ai-assistant');
@@ -143,72 +144,74 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
-        {/* Landing page - shown to everyone first */}
-        <Stack.Screen
-          name="index"
-          options={{ gestureEnabled: false }}
-        />
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Stack screenOptions={{ headerShown: false }} initialRouteName="index">
+          {/* Landing page - shown to everyone first */}
+          <Stack.Screen
+            name="index"
+            options={{ gestureEnabled: false }}
+          />
 
-        {/* Onboarding - First time users only */}
-        <Stack.Screen
-          name="onboarding"
-          options={{ gestureEnabled: false }}
-        />
+          {/* Onboarding - First time users only */}
+          <Stack.Screen
+            name="onboarding"
+            options={{ gestureEnabled: false }}
+          />
 
-        {/* Auth screens */}
-        <Stack.Screen
-          name="login"
-          options={{ gestureEnabled: false }}
-        />
-        <Stack.Screen name="screens/HomeScreen" />
+          {/* Auth screens */}
+          <Stack.Screen
+            name="login"
+            options={{ gestureEnabled: false }}
+          />
+          <Stack.Screen name="screens/HomeScreen" />
 
-        {/* Profile setup (after first login) */}
-        <Stack.Screen name="profile-setup" />
+          {/* Profile setup (after first login) */}
+          <Stack.Screen name="profile-setup" />
 
-        {/* Patient app */}
-        <Stack.Screen
-          name="(tabs)"
-          options={{ gestureEnabled: false }}
-        />
+          {/* Patient app */}
+          <Stack.Screen
+            name="(tabs)"
+            options={{ gestureEnabled: false }}
+          />
 
-        {/* Doctor portal */}
-        <Stack.Screen
-          name="(doctor)"
-          options={{ gestureEnabled: false }}
-        />
+          {/* Doctor portal */}
+          <Stack.Screen
+            name="(doctor)"
+            options={{ gestureEnabled: false }}
+          />
 
-        {/* Modal */}
-        <Stack.Screen
-          name="modal"
-          options={{ presentation: 'modal' }}
-        />
+          {/* Modal */}
+          <Stack.Screen
+            name="modal"
+            options={{ presentation: 'modal' }}
+          />
 
-        {/* Disclaimer */}
-        <Stack.Screen
-          name="disclaimer"
-          options={{ gestureEnabled: false }}
-        />
+          {/* Disclaimer */}
+          <Stack.Screen
+            name="disclaimer"
+            options={{ gestureEnabled: false }}
+          />
 
-        {/* Daily Check-in Flow */}
-        <Stack.Screen
-          name="daily-checkin"
-          options={{
-            gestureEnabled: false, // Prevent swipe back during check-in
-            headerShown: false
-          }}
-        />
+          {/* Daily Check-in Flow */}
+          <Stack.Screen
+            name="daily-checkin"
+            options={{
+              gestureEnabled: false, // Prevent swipe back during check-in
+              headerShown: false
+            }}
+          />
 
-        <Stack.Screen
-          name="CheckinCompleteScreen"
-          options={{
-            gestureEnabled: false, // Prevent going back to check-in
-            headerShown: false
-          }}
-        />
-      </Stack>
-    </GestureHandlerRootView>
+          <Stack.Screen
+            name="CheckinCompleteScreen"
+            options={{
+              gestureEnabled: false, // Prevent going back to check-in
+              headerShown: false
+            }}
+          />
+        </Stack>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 

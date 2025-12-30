@@ -281,16 +281,16 @@ export function calculateLifestyleScore(answers: CheckinAnswers): {
 
     // Generate insights
     if (breakdown.diet < 0) {
-        insights.push('🍎 Diet: Focus on more fruits, vegetables, and water');
+        insights.push('Diet: Focus on more fruits, vegetables, and water');
     }
     if (breakdown.activity < 0) {
-        insights.push('🏃 Activity: Try to move more and sit less tomorrow');
+        insights.push('Activity: Try to move more and sit less tomorrow');
     }
     if (breakdown.sleep < 0) {
-        insights.push('😴 Sleep: Prioritize 7-8 hours of quality sleep tonight');
+        insights.push('Sleep: Prioritize 7-8 hours of quality sleep tonight');
     }
     if (breakdown.stress < -1) {
-        insights.push('🧠 Stress: Find ways to relax—meditation, walks, or talking helps');
+        insights.push('Stress: Find ways to relax—meditation, walks, or talking helps');
     }
 
     // Score: 0-100 scale

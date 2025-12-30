@@ -1,71 +1,33 @@
 // lib/aiConversationEngine.ts
-import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import OpenAI from 'openai';
+// import OpenAI from 'openai'; // Removed
 import { supabase } from './supabaseClient';
 
-// Safe OpenAI initialization
-const getOpenAIClient = () => {
-  const apiKey = Constants.expoConfig?.extra?.openAIApiKey;
-  
-  if (!apiKey) {
-    console.error('OpenAI API key is missing');
-    return null;
-  }
+// Backend AI Configuration
+const EDGE_FUNCTION_NAME = 'clinical-ai';
 
-  try {
-    return new OpenAI({
-      apiKey: apiKey,
-      dangerouslyAllowBrowser: true,
-    });
-  } catch (error) {
-    console.error('Failed to initialize OpenAI:', error);
-    return null;
-  }
-};
-
-const openai = getOpenAIClient();
-
-// Update your generateProactiveQuestion function to handle missing OpenAI client
 export async function generateProactiveQuestion(
-  anomaly: any,
-  userContext: any
+  userId: string, // Added userId for Edge Function context
+  anomaly: any
 ): Promise<string> {
   try {
-    // If OpenAI client is not available, use fallback immediately
-    if (!openai) {
-      console.warn('OpenAI client not available, using fallback question');
-      return generateFallbackQuestion(anomaly, userContext);
-    }
-
-    const timeContext = getTimeContext(userContext.current_hour);
-    const triggerContext = getRelevantTriggers(anomaly.metric_name, userContext.known_triggers || []);
-    
-    const prompt = buildQuestionPrompt(anomaly, userContext, timeContext, triggerContext);
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `You are Curable AI, a friendly and caring health companion for ${userContext.full_name}. 
-Your job is to check in on health changes with warmth, curiosity, and zero medical jargon. 
-Be conversational, brief (2-3 sentences max), and always end with an open question.
-Use their name naturally, add relevant emoji sparingly, and speak like a supportive friend.`,
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      temperature: 0.8,
-      max_tokens: 500,
+    const { data, error: functionError } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, {
+      body: {
+        action: 'generate_question',
+        userId,
+        payload: { anomaly }
+      }
     });
 
-    return response.choices[0]?.message?.content?.trim() || generateFallbackQuestion(anomaly, userContext);
+    if (functionError) {
+      console.warn('Edge Function failed, using fallback');
+      return generateFallbackQuestion(anomaly, { full_name: 'there' });
+    }
+
+    return data.question || generateFallbackQuestion(anomaly, { full_name: 'there' });
   } catch (error) {
     console.error('Error generating AI question:', error);
-    return generateFallbackQuestion(anomaly, userContext);
+    return generateFallbackQuestion(anomaly, { full_name: 'there' });
   }
 }
 
@@ -75,7 +37,7 @@ type UserContext = {
   full_name?: string;
   recent_answers?: { question: string; user_answer: string }[];
   known_triggers?: any[];
-  current_hour: number;
+  current_hour?: number;
 };
 
 type Anomaly = {
@@ -164,7 +126,7 @@ function getTimeContext(hour: number): string {
  */
 function getRelevantTriggers(metric: string, triggers: any[]): string {
   const relevant = triggers.filter(t => t.related_metric === metric && t.confidence > 0.5);
-  
+
   if (relevant.length === 0) return '';
 
   const triggerList = relevant
@@ -180,7 +142,7 @@ function getRelevantTriggers(metric: string, triggers: any[]): string {
 function generateFallbackQuestion(anomaly: Anomaly, userContext: UserContext): string {
   const metric = formatMetricName(anomaly.metric_name);
   const name = userContext.full_name || 'there';
-  
+
   const templates = [
     `Hey ${name} 👋, I noticed your ${metric} ${anomaly.change_direction} by ${anomaly.change_percent}%. How are you feeling today?`,
     `Hi ${name}, your ${metric} has changed quite a bit recently. Did anything different happen?`,
@@ -355,7 +317,7 @@ export async function processAnomalyAndSendQuestion(
     const userContext = await getUserContext(userId);
 
     // Generate AI question
-    const question = await generateProactiveQuestion(anomaly, userContext);
+    const question = await generateProactiveQuestion(userId, anomaly);
 
     // Save question
     const questionId = await saveProactiveQuestion(userId, anomaly.id, question, anomaly);
@@ -403,7 +365,7 @@ export async function processUserAnomalies(userId: string): Promise<number> {
     for (const anomaly of anomalies) {
       const success = await processAnomalyAndSendQuestion(userId, anomaly);
       if (success) processed++;
-      
+
       // Small delay between questions
       await new Promise(resolve => setTimeout(resolve, 1000));
     }

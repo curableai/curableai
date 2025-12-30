@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 
 interface Medication {
+  id?: string;
   name: string;
   dosage: string;
   frequency: string;
@@ -38,35 +39,124 @@ export default function MedicationAnalyzer() {
   const { colors } = useTheme();
   const [userId, setUserId] = useState<string>('');
   const [medications, setMedications] = useState<Medication[]>([]);
-  const [currentMed, setCurrentMed] = useState({ name: '', dosage: '', frequency: '' });
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
   const [showInput, setShowInput] = useState(false);
+  const [currentMed, setCurrentMed] = useState<Medication>({ name: '', dosage: '', frequency: '' });
+  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [userName, setUserName] = useState<string>('');
 
   useEffect(() => {
-    loadUser();
+    loadUserAndMeds();
   }, []);
 
-  const loadUser = async () => {
+  const loadUserAndMeds = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       setUserId(user.id);
+      fetchMedications(user.id);
+
+      // Fetch user name for personalized button
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.full_name) {
+        setUserName(profile.full_name.split(' ')[0]); // Get first name
+      }
     }
   };
 
-  const handleAddMedication = () => {
-    if (currentMed.name && currentMed.dosage) {
-      setMedications([...medications, currentMed]);
-      setCurrentMed({ name: '', dosage: '', frequency: '' });
-      setShowInput(false);
-      setAnalysis(null); // Clear previous analysis
+  const fetchMedications = async (uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('medications')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      if (data) {
+        // Map DB fields to local state
+        const loadedMeds = data.map(m => ({
+          name: m.medication_name, // Mapping from DB column
+          dosage: m.dosage,
+          frequency: m.frequency,
+          id: m.id // Keep track of DB ID for deletion
+        }));
+        setMedications(loadedMeds);
+      }
+    } catch (error) {
+      console.error('Error fetching medications:', error);
+    }
+  };
+
+  const handleAddMedication = async () => {
+    if (currentMed.name && currentMed.dosage && userId) {
+      try {
+        const { data, error } = await supabase
+          .from('medications')
+          .insert({
+            user_id: userId,
+            medication_name: currentMed.name,
+            dosage: currentMed.dosage,
+            frequency: currentMed.frequency
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          const newMed = {
+            name: data.medication_name,
+            dosage: data.dosage,
+            frequency: data.frequency,
+            id: data.id
+          };
+          setMedications([...medications, newMed]);
+          setCurrentMed({ name: '', dosage: '', frequency: '' });
+          setShowInput(false);
+          setAnalysis(null);
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Failed to save medication.');
+        console.error(error);
+      }
+    }
+  };
+
+  const removeMedication = async (index: number) => {
+    const medToDelete = medications[index];
+    // Optimize UI first
+    setMedications(medications.filter((_, i) => i !== index));
+    setAnalysis(null);
+
+    if (medToDelete.id) {
+      try {
+        const { error } = await supabase
+          .from('medications')
+          .delete()
+          .eq('id', medToDelete.id);
+
+        if (error) {
+          console.error('Error deleting med:', error);
+          // Ideally revert UI state here if failed
+          loadUserAndMeds(); // Reload to sync
+        }
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
   const handleAnalyze = async () => {
-    if (medications.length === 0 || !userId) return;
+    if (medications.length === 0) return;
 
     setAnalyzing(true);
+    setAnalysis(null);
 
     try {
       const result = await analyzeMedicationsWithAI(userId, medications);
@@ -74,19 +164,14 @@ export default function MedicationAnalyzer() {
       if (result) {
         setAnalysis(result);
       } else {
-        Alert.alert('Error', 'Unable to analyze medications. Please check your AI assistant configuration.');
+        Alert.alert('Analysis Failed', 'Could not retrieve clinical insights. Please try again.');
       }
     } catch (error) {
-      console.error('Error analyzing medications:', error);
-      Alert.alert('Error', 'Failed to analyze medications. Please try again.');
+      console.error('AI Analysis Error:', error);
+      Alert.alert('Server Error', 'The clinical AI is currently busy. Please try again in a moment.');
     } finally {
       setAnalyzing(false);
     }
-  };
-
-  const removeMedication = (index: number) => {
-    setMedications(medications.filter((_, i) => i !== index));
-    setAnalysis(null);
   };
 
   return (
@@ -183,10 +268,7 @@ export default function MedicationAnalyzer() {
               {analyzing ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <>
-                  <Ionicons name="sparkles" size={20} color="#fff" />
-                  <Text style={styles.analyzeButtonText}>Execute AI Analysis</Text>
-                </>
+                <Text style={styles.analyzeButtonText}>Effect of drug on {userName || 'User'}</Text>
               )}
             </TouchableOpacity>
           )}

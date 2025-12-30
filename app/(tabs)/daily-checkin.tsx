@@ -1,18 +1,15 @@
-// app/daily-checkin.tsx - LIFESTYLE PILLAR VERSION
-
 import OptionChips from '@/components/checkin/OptionChips';
 import {
     calculateLifestyleScore,
     CheckinAnswers,
     DAILY_CHECKIN_QUESTIONS,
-    generateLifestyleMessage,
-    mapAnswersToSignals
+    generateLifestyleMessage
 } from '@/lib/checkinQuestions';
 import { supabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/theme';
-import { clinicalSignalService } from '@/services/clinicalSignalCapture';
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -23,14 +20,22 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DailyCheckinScreen() {
     const router = useRouter();
     const { colors } = useTheme();
+    const insets = useSafeAreaInsets();
 
     const [answers, setAnswers] = useState<CheckinAnswers>({});
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [saving, setSaving] = useState(false);
+
+    // Lock states
+    const [isLoading, setIsLoading] = useState(true);
+    const [isLocked, setIsLocked] = useState(false);
+    const [isCompleted, setIsCompleted] = useState(false);
+    const [availableTime, setAvailableTime] = useState("6:00 PM");
 
     const questions = DAILY_CHECKIN_QUESTIONS;
     const currentQuestion = questions[currentQuestionIndex];
@@ -39,7 +44,92 @@ export default function DailyCheckinScreen() {
 
     const progress = ((currentQuestionIndex + 1) / questions.length) * 100;
 
-    // Get pillar name for current question
+    // Check status check on mount
+    useEffect(() => {
+        checkStatusAndSchedule();
+
+        // Setup notifications handler
+        Notifications.setNotificationHandler({
+            handleNotification: async () => ({
+                shouldShowAlert: true,
+                shouldPlaySound: true,
+                shouldSetBadge: false,
+                shouldShowBanner: true,
+                shouldShowList: true,
+            }),
+        });
+    }, []);
+
+    const checkStatusAndSchedule = async () => {
+        try {
+            setIsLoading(true);
+            const { data: { user } } = await supabase.auth.getUser();
+
+            if (user) {
+                // 1. Check if already completed today
+                const today = new Date().toISOString().split('T')[0];
+
+                // Check if check-in exists for today in daily_checkins table
+                const { data: checkin } = await supabase
+                    .from('daily_checkins')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('checkin_date', today)
+                    .maybeSingle();
+
+                if (checkin) {
+                    setIsCompleted(true);
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
+            // 2. Check time (Must be after 6 PM / 18:00)
+            const currentHour = new Date().getHours();
+            const UNLOCK_HOUR = 18; // 6 PM
+
+            if (currentHour < UNLOCK_HOUR) {
+                setIsLocked(true);
+            }
+
+            // 3. Schedule Notification for 8 PM
+            scheduleDailyReminder();
+
+        } catch (error) {
+            console.error('Error checking status:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const scheduleDailyReminder = async () => {
+        const { status } = await Notifications.getPermissionsAsync();
+        let finalStatus = status;
+        if (status !== 'granted') {
+            const { status: newStatus } = await Notifications.requestPermissionsAsync();
+            finalStatus = newStatus;
+        }
+
+        if (finalStatus === 'granted') {
+            // Cancel existing to avoid dupes
+            await Notifications.cancelAllScheduledNotificationsAsync();
+
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: "Time to check in! 🌙",
+                    body: "How did your day go? Log your lifestyle stats now.",
+                },
+                trigger: {
+                    hour: 20, // 8 PM
+                    minute: 0,
+                    type: Notifications.SchedulableTriggerInputTypes.DAILY
+                },
+            });
+        }
+    };
+
+    // ... [Helper functions getPillarIcon, etc.] ...
+
     const getPillarIcon = (pillar: string) => {
         switch (pillar) {
             case 'diet': return '🍎';
@@ -64,7 +154,6 @@ export default function DailyCheckinScreen() {
         const newAnswers = { ...answers, [currentQuestion.id]: value };
         setAnswers(newAnswers);
 
-        // Auto-advance
         setTimeout(() => {
             if (isLastQuestion) {
                 handleComplete(newAnswers);
@@ -86,33 +175,33 @@ export default function DailyCheckinScreen() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('User not authenticated');
 
-            // Map answers to signals
-            const signals = mapAnswersToSignals(finalAnswers);
-
-            // Save each signal
-            const savePromises = signals.map(signal =>
-                clinicalSignalService.captureSignal({
-                    signalId: signal.signalId,
-                    value: signal.value,
-                    source: 'daily_checkin',
-                    capturedAt: new Date().toISOString()
-                })
-            );
-
-            const results = await Promise.allSettled(savePromises);
-            const failedCount = results.filter(r => r.status === 'rejected').length;
-
-            if (failedCount > 0) {
-                console.warn(`${failedCount} signals failed to save`);
-            }
-
-            // Calculate lifestyle score
+            // 1. Calculate Score & Insights
             const { score, insights } = calculateLifestyleScore(finalAnswers);
-
-            // Generate personalized message
             const message = generateLifestyleMessage(finalAnswers);
 
-            // Navigate to completion screen
+            // 2. Prepare Record for daily_checkins table
+            // We save a single row per day with all data
+            const checkinRecord = {
+                user_id: user.id,
+                checkin_date: new Date().toISOString().split('T')[0],
+                lifestyle_score: score,
+                mood: finalAnswers.general_wellbeing,
+                stress_level: finalAnswers.stress_level,
+                sleep_quality: finalAnswers.sleep_quality,
+                energy_level: finalAnswers.energy_level,
+                answers: finalAnswers, // Full JSON payload
+                insights: insights
+            };
+
+            const { error } = await supabase
+                .from('daily_checkins')
+                .upsert(checkinRecord, {
+                    onConflict: 'user_id, checkin_date'
+                });
+
+            if (error) throw error;
+
+            // 3. Navigate to Complete Screen
             router.replace({
                 pathname: '/CheckinCompleteScreen' as any,
                 params: {
@@ -128,6 +217,44 @@ export default function DailyCheckinScreen() {
             setSaving(false);
         }
     };
+
+    if (isLoading) {
+        return (
+            <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+        );
+    }
+
+    if (isCompleted) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+                <Text style={{ fontSize: 48, marginBottom: 16 }}>✅</Text>
+                <Text style={[styles.questionText, { color: colors.text, textAlign: 'center' }]}>You're all set for today!</Text>
+                <Text style={[styles.helpText, { color: colors.textMuted, textAlign: 'center' }]}>
+                    Great job checking in. Come back tomorrow evening for your next log.
+                </Text>
+                <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, padding: 16 }}>
+                    <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Go Home</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
+
+    if (isLocked) {
+        return (
+            <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+                <Text style={{ fontSize: 48, marginBottom: 16 }}>🌙</Text>
+                <Text style={[styles.questionText, { color: colors.text, textAlign: 'center' }]}>Check-in opens at 6 PM</Text>
+                <Text style={[styles.helpText, { color: colors.textMuted, textAlign: 'center' }]}>
+                    Daily lifestyle logs are best done at the end of your day. We'll send you a reminder tonight!
+                </Text>
+                <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, padding: 16 }}>
+                    <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Go Home</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
 
     if (saving) {
         return (
@@ -202,8 +329,8 @@ export default function DailyCheckinScreen() {
                 </View>
             </ScrollView>
 
-            {/* Navigation */}
-            <View style={styles.footer}>
+            {/* Navigation - must clear floating tab bar (height:64 + bottom:24 + buffer) */}
+            <View style={[styles.footer, { paddingBottom: 110 + insets.bottom }]}>
                 <TouchableOpacity
                     onPress={goToPreviousQuestion}
                     disabled={isFirstQuestion}
@@ -318,7 +445,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 32,
-        paddingBottom: 32,
+        // paddingBottom handled dynamically
         gap: 16
     },
     navButton: {
