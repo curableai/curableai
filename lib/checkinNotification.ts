@@ -45,7 +45,14 @@ export const scheduleDailyCheckin = async () => {
     // Cancel existing notifications
     await Notifications.cancelAllScheduledNotificationsAsync();
 
-    // Schedule for 8 AM daily
+    // Skip scheduling on Android in Expo Go (not fully supported)
+    // Calendar triggers don't work on Android in Expo Go
+    if (Platform.OS === 'android') {
+        console.log('⚠️ Daily notifications not available on Android in Expo Go. Use a development build.');
+        return;
+    }
+
+    // Schedule for 8 AM daily (iOS only in Expo Go)
     await Notifications.scheduleNotificationAsync({
         content: {
             title: "Good morning! 🌅",

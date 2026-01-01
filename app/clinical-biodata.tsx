@@ -224,7 +224,7 @@ export default function ClinicalBiodataScreen() {
                             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Weight (kg)</Text>
                             <TextInput
                                 style={[styles.input, { color: colors.text, borderBottomColor: editing ? colors.primary : 'transparent' }]}
-                                value={tempData?.weight_kg.toString()}
+                                value={tempData?.weight_kg?.toString() ?? ''}
                                 keyboardType="numeric"
                                 editable={editing}
                                 onChangeText={(val) => setTempData(prev => ({ ...prev!, weight_kg: parseFloat(val) || 0 }))}
@@ -234,7 +234,7 @@ export default function ClinicalBiodataScreen() {
                             <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Height (cm)</Text>
                             <TextInput
                                 style={[styles.input, { color: colors.text, borderBottomColor: editing ? colors.primary : 'transparent' }]}
-                                value={tempData?.height_cm.toString()}
+                                value={tempData?.height_cm?.toString() ?? ''}
                                 keyboardType="numeric"
                                 editable={editing}
                                 onChangeText={(val) => setTempData(prev => ({ ...prev!, height_cm: parseFloat(val) || 0 }))}

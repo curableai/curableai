@@ -125,11 +125,9 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Hide legacy and utility tabs */}
-      <Tabs.Screen name="doctors" options={{ href: null }} />
+      {/* Hide utility screens from tab bar */}
+      <Tabs.Screen name="explore" options={{ href: null }} />
       <Tabs.Screen name="predictions" options={{ href: null }} />
-      <Tabs.Screen name="medication" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }

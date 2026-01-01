@@ -102,10 +102,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
             {
                 ios: {
                     useFrameworks: 'static',
-                    deploymentTarget: '26.0',
                 },
             },
         ],
+        'expo-secure-store',
     ],
     experiments: {
         typedRoutes: true,

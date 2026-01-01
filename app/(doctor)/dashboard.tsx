@@ -2,12 +2,12 @@ import { useTheme } from '@/lib/theme';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
-export default function ExploreScreen() {
+export default function DoctorDashboard() {
     const { colors } = useTheme();
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            <Text style={[styles.title, { color: colors.text }]}>Explore</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Doctor Dashboard</Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>
                 Coming soon...
             </Text>

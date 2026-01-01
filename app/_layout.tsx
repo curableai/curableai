@@ -193,14 +193,6 @@ export default function RootLayout() {
             options={{ gestureEnabled: false }}
           />
 
-          {/* Daily Check-in Flow */}
-          <Stack.Screen
-            name="daily-checkin"
-            options={{
-              gestureEnabled: false, // Prevent swipe back during check-in
-              headerShown: false
-            }}
-          />
 
           <Stack.Screen
             name="CheckinCompleteScreen"
