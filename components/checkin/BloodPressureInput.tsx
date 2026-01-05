@@ -53,7 +53,7 @@ export default function BloodPressureInput({
 
             <TouchableOpacity onPress={onSkip} style={styles.skipButton}>
                 <Text style={[styles.skipText, { color: colors.textLight }]}>
-                    I haven't checked it today
+                    I haven&apos;t checked it today
                 </Text>
             </TouchableOpacity>
         </View>
