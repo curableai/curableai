@@ -29,7 +29,6 @@ export default function InsightsScreen() {
     const { colors } = useTheme();
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [userName, setUserName] = useState('');
     const [insights, setInsights] = useState<InsightCard[]>([]);
 
     useEffect(() => {
@@ -53,7 +52,6 @@ export default function InsightsScreen() {
                 .order('checkin_date', { ascending: false })
                 .limit(7);
 
-            const signals = ['general_wellbeing', 'energy_level', 'sleep_quality', 'body_temperature', 'blood_pressure_systolic'];
             const generatedInsights: InsightCard[] = [];
 
             // Process specific check-in signals from daily_checkins table

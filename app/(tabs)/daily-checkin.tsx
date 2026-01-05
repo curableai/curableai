@@ -35,7 +35,6 @@ export default function DailyCheckinScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isLocked, setIsLocked] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
-    const [availableTime, setAvailableTime] = useState("6:00 PM");
 
     const questions = DAILY_CHECKIN_QUESTIONS;
     const currentQuestion = questions[currentQuestionIndex];
@@ -129,16 +128,6 @@ export default function DailyCheckinScreen() {
     };
 
     // ... [Helper functions getPillarIcon, etc.] ...
-
-    const getPillarIcon = (pillar: string) => {
-        switch (pillar) {
-            case 'diet': return '🍎';
-            case 'activity': return '🏃';
-            case 'sleep': return '💤';
-            case 'stress': return '🧘';
-            default: return '💚';
-        }
-    };
 
     const getPillarName = (pillar: string) => {
         switch (pillar) {

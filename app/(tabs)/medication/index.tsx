@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabaseClient';
 import { useTheme } from '@/lib/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -35,7 +34,6 @@ interface AIAnalysis {
 }
 
 export default function MedicationAnalyzer() {
-  const router = useRouter();
   const { colors } = useTheme();
   const [userId, setUserId] = useState<string>('');
   const [medications, setMedications] = useState<Medication[]>([]);

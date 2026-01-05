@@ -1,3 +1,4 @@
+import { TypewriterMessage } from '@/components/TypewriterMessage';
 import { aiPromptService, HealthPrompt } from '@/lib/AIPromptService';
 import { chatSessionService } from '@/lib/chatSessionService';
 import { interpretClinicalDocument } from '@/lib/openAIHealthService';
@@ -37,8 +38,6 @@ interface ChatMessage {
   shouldAnimate?: boolean;
   imageUri?: string; // For displaying uploaded images in chat
 }
-
-import { TypewriterMessage } from '@/components/TypewriterMessage';
 
 
 export default function AIHealthAssistant() {

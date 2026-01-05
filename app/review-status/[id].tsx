@@ -108,7 +108,7 @@ export default function ReviewStatusScreen() {
               Alert.alert('Cancelled', 'Review request has been cancelled', [
                 { text: 'OK', onPress: () => router.back() }
               ]);
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to cancel review');
             }
           },

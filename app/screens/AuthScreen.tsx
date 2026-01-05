@@ -34,7 +34,7 @@ export default function AuthScreen() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) await redirectUser(session.user.id);
-    } catch (err) { console.log('No existing session'); }
+    } catch { console.log('No existing session'); }
   };
 
   const redirectUser = async (userId: string) => {
@@ -49,7 +49,7 @@ export default function AuthScreen() {
       } else {
         router.replace('/(tabs)');
       }
-    } catch (err) { router.replace('/(tabs)'); }
+    } catch { router.replace('/(tabs)'); }
   };
 
   const handleSignUp = async () => {
@@ -69,7 +69,7 @@ export default function AuthScreen() {
         Alert.alert('Verification Required', 'Please check your email to verify your account.', [{ text: 'OK' }]);
         setLoading(false);
       }
-    } catch (err) { setError('System error. Please try again.'); setLoading(false); }
+    } catch { setError('System error. Please try again.'); setLoading(false); }
   };
 
   const handleSignIn = async () => {
@@ -81,7 +81,7 @@ export default function AuthScreen() {
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
       if (signInError) { setError(signInError.message); setLoading(false); }
-    } catch (err) { setError('Connection error. Please try again.'); setLoading(false); }
+    } catch { setError('Connection error. Please try again.'); setLoading(false); }
   };
 
   return (
