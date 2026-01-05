@@ -27,7 +27,6 @@ interface AnalysisResult {
 export default function ClinicalDocumentsScreen() {
     const router = useRouter();
     const { colors } = useTheme();
-    const [uploading, setUploading] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);

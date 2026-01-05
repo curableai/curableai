@@ -178,7 +178,7 @@ export default function HomeScreen() {
         {/* Summary Section - Only show if we have data */}
         {healthMetrics.length > 0 && (
           <View style={styles.summarySection}>
-            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Today's Status</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Today&apos;s Status</Text>
             <View style={[styles.summaryCard, { backgroundColor: '#0D0D0D' }]}>
               <Text style={[styles.summaryText, { color: colors.text }]}>
                 {isWatchConnected

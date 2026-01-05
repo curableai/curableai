@@ -1,11 +1,9 @@
 import { supabase } from '@/lib/supabaseClient';
-import { useTheme } from '@/lib/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 
 export default function TabLayout() {
-  const { colors } = useTheme();
   const [userDisplay, setUserDisplay] = useState('Profile');
 
   useEffect(() => {

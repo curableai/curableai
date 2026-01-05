@@ -108,7 +108,7 @@ export default function ReviewStatusScreen() {
               Alert.alert('Cancelled', 'Review request has been cancelled', [
                 { text: 'OK', onPress: () => router.back() }
               ]);
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to cancel review');
             }
           },
@@ -342,7 +342,7 @@ export default function ReviewStatusScreen() {
             <View className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-5 mb-5">
               <View className="flex-row items-center mb-3">
                 <Ionicons name="medical" size={24} color="#10b981" />
-                <Text className="ml-2 text-lg font-bold text-emerald-900">Doctor's Review</Text>
+                <Text className="ml-2 text-lg font-bold text-emerald-900">Doctor&apos;s Review</Text>
               </View>
 
               <View className="mb-3">

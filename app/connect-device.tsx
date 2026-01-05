@@ -173,7 +173,7 @@ export default function ConnectDeviceScreen() {
                                     <View style={styles.reqItem}>
                                         <Text style={[styles.reqNumber, { color: colors.primary }]}>4.</Text>
                                         <Text style={[styles.reqText, { color: colors.text }]}>
-                                            Come back here and tap "Connect Health System"
+                                            Come back here and tap &quot;Connect Health System&quot;
                                         </Text>
                                     </View>
                                 </View>
@@ -197,13 +197,13 @@ export default function ConnectDeviceScreen() {
                                     <View style={styles.reqItem}>
                                         <Text style={[styles.reqNumber, { color: colors.textMuted }]}>2.</Text>
                                         <Text style={[styles.reqText, { color: colors.text }]}>
-                                            In the app's settings, enable "Health Connect" sync.
+                                            In the app&apos;s settings, enable &quot;Health Connect&quot; sync.
                                         </Text>
                                     </View>
                                     <View style={styles.reqItem}>
                                         <Text style={[styles.reqNumber, { color: colors.textMuted }]}>3.</Text>
                                         <Text style={[styles.reqText, { color: colors.text }]}>
-                                            Return here and tap "Connect Health System".
+                                            Return here and tap &quot;Connect Health System&quot;.
                                         </Text>
                                     </View>
                                 </View>
@@ -218,7 +218,7 @@ export default function ConnectDeviceScreen() {
                                 {hasBrandApp && <Ionicons name="checkmark" size={14} color="white" />}
                             </View>
                             <Text style={[styles.checkboxText, { color: colors.text }]}>
-                                I've completed the setup steps above.
+                                I&apos;ve completed the setup steps above.
                             </Text>
                         </Pressable>
                     </View>

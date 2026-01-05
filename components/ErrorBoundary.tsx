@@ -48,7 +48,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         </View>
                         <Text style={styles.title}>Something went wrong</Text>
                         <Text style={styles.message}>
-                            We've encountered an unexpected clinical error. Your data is safe, but we need to restart this section.
+                            We&apos;ve encountered an unexpected clinical error. Your data is safe, but we need to restart this section.
                         </Text>
 
                         {__DEV__ && (

@@ -25,7 +25,6 @@ export default function CheckinCompleteScreen() {
     // Parse params
     const message = params.message as string;
     const score = params.score ? parseInt(params.score as string) : 0;
-    const insights = params.insights ? JSON.parse(params.insights as string) : [];
 
     const [aiMessage, setAiMessage] = useState<string>(message || '');
     const [loading, setLoading] = useState(!message);

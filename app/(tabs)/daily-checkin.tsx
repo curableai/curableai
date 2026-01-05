@@ -35,7 +35,6 @@ export default function DailyCheckinScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [isLocked, setIsLocked] = useState(false);
     const [isCompleted, setIsCompleted] = useState(false);
-    const [availableTime, setAvailableTime] = useState("6:00 PM");
 
     const questions = DAILY_CHECKIN_QUESTIONS;
     const currentQuestion = questions[currentQuestionIndex];
@@ -130,16 +129,6 @@ export default function DailyCheckinScreen() {
 
     // ... [Helper functions getPillarIcon, etc.] ...
 
-    const getPillarIcon = (pillar: string) => {
-        switch (pillar) {
-            case 'diet': return '🍎';
-            case 'activity': return '🏃';
-            case 'sleep': return '💤';
-            case 'stress': return '🧘';
-            default: return '💚';
-        }
-    };
-
     const getPillarName = (pillar: string) => {
         switch (pillar) {
             case 'diet': return 'Diet & Nutrition';
@@ -230,7 +219,7 @@ export default function DailyCheckinScreen() {
         return (
             <SafeAreaView style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
                 <Text style={{ fontSize: 48, marginBottom: 16 }}>✅</Text>
-                <Text style={[styles.questionText, { color: colors.text, textAlign: 'center' }]}>You're all set for today!</Text>
+                <Text style={[styles.questionText, { color: colors.text, textAlign: 'center' }]}>You&apos;re all set for today!</Text>
                 <Text style={[styles.helpText, { color: colors.textMuted, textAlign: 'center' }]}>
                     Great job checking in. Come back tomorrow evening for your next log.
                 </Text>
@@ -247,7 +236,7 @@ export default function DailyCheckinScreen() {
                 <Text style={{ fontSize: 48, marginBottom: 16 }}>🌙</Text>
                 <Text style={[styles.questionText, { color: colors.text, textAlign: 'center' }]}>Check-in opens at 6 PM</Text>
                 <Text style={[styles.helpText, { color: colors.textMuted, textAlign: 'center' }]}>
-                    Daily lifestyle logs are best done at the end of your day. We'll send you a reminder tonight!
+                    Daily lifestyle logs are best done at the end of your day. We&apos;ll send you a reminder tonight!
                 </Text>
                 <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 24, padding: 16 }}>
                     <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '600' }}>Go Home</Text>
